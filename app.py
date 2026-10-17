@@ -151,9 +151,9 @@ def mailer_worker(senders_list, targets_list, subject, body_template, delay):
         msg["From"] = current["email"]
         msg["To"] = target
         
-                try:
+        try:
             with smtplib.SMTP("smtp.firstmail.ltd", 587) as server:
-                server.starttls() # Принудительно включаем шифрование
+                server.starttls() 
                 server.login(current["email"], current["password"])
                 server.send_message(msg)
 

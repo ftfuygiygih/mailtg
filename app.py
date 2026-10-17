@@ -98,12 +98,12 @@ def mailer_worker(senders_list, targets_list, subject, body_template, delay):
         msg["From"] = current["email"]
         msg["To"] = target
         
-        try:
-            with smtplib.SMTP("smtp.office365.com", 587) as server:
-                server.ehlo()
-                server.starttls()
+                try:
+            # Используем SMTP_SSL и порт 465
+            with smtplib.SMTP_SSL("smtp.firstmail.ltd", 465) as server:
                 server.login(current["email"], current["password"])
                 server.send_message(msg)
+
             
             print(f"✅ Отправлено: {target} (код: {unique_code})")
             success_count += 1

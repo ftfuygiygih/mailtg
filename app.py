@@ -11,25 +11,29 @@ app = Flask(__name__)
 
 # --- Настройки Telegram ---
 TELEGRAM_BOT_TOKEN = '8793490491:AAH1aXRS3k9xzbouVQBIP-UjwWYD5jPeJ1U' 
-TELEGRAM_CHAT_ID = '8705859046'            
+TELEGRAM_CHAT_ID = '8705859046'
 
 def send_telegram_message(text):
     if TELEGRAM_BOT_TOKEN == 'ТВОЙ_ТОКЕН_ОТ_BOTFATHER' or TELEGRAM_CHAT_ID == 'ТВОЙ_CHAT_ID':
-        print("⚠️ Telegram уведомление не отправлено: не настроен токен или chat_id.")
         return
-        
     url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
-    payload = {
-        "chat_id": TELEGRAM_CHAT_ID,
-        "text": text,
-        "parse_mode": "HTML"
-    }
-    try:
-        requests.post(url, json=payload, timeout=5)
-    except Exception as e:
-        print(f"❌ Ошибка отправки в Telegram: {e}")
+    payload = {"chat_id": TELEGRAM_CHAT_ID, "text": text, "parse_mode": "HTML"}
+    try: requests.post(url, json=payload, timeout=5)
+    except: pass
 
-# Веб-панель (Без поля "Отправители", так как они читаются из файла)
+def load_senders():
+    """Функция для чтения почт из файла"""
+    senders = []
+    try:
+        with open('senders.txt', 'r', encoding='utf-8') as f:
+            for line in f.read().strip().split('\n'):
+                if ':' in line:
+                    email, pwd = line.split(':', 1)
+                    senders.append({"email": email.strip(), "password": pwd.strip()})
+    except FileNotFoundError:
+        pass
+    return senders
+
 HTML_TEMPLATE = """
 <!DOCTYPE html>
 <html lang="ru">
@@ -40,28 +44,77 @@ HTML_TEMPLATE = """
         body { background-color: #121212; color: #ffffff; font-family: sans-serif; padding: 20px; }
         .container { max-width: 600px; margin: auto; background: #1e1e1e; padding: 20px; border-radius: 8px; }
         label { display: block; margin-top: 15px; font-weight: bold; color: #bb86fc; }
-        input, textarea { width: 100%; box-sizing: border-box; background: #2c2c2c; color: #fff; border: 1px solid #444; padding: 10px; border-radius: 4px; margin-top: 5px; }
-        button { background: #bb86fc; color: #000; border: none; padding: 12px 20px; margin-top: 20px; border-radius: 4px; cursor: pointer; font-weight: bold; width: 100%; }
-        button:hover { background: #9b68e6; }
-        .success { color: #03dac6; margin-top: 20px; font-weight: bold; text-align: center; }
-        .error { color: #cf6679; margin-top: 20px; font-weight: bold; text-align: center; }
+        input[type="text"], input[type="password"], input[type="number"], textarea { width: 100%; box-sizing: border-box; background: #2c2c2c; color: #fff; border: 1px solid #444; padding: 10px; border-radius: 4px; margin-top: 5px; }
+        
+        /* Стили для кнопок управления почтами */
+        .controls { display: flex; gap: 10px; margin-top: 10px; align-items: center; flex-wrap: wrap; }
+        .controls button { background: #333; color: #fff; border: 1px solid #555; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-size: 13px; margin: 0;}
+        .controls button:hover { background: #444; }
+        .controls input[type="number"] { width: 60px; padding: 6px; margin: 0; }
+        
+        /* Стили для списка с галочками */
+        .checkbox-list { background: #2c2c2c; padding: 15px; border-radius: 4px; margin-top: 10px; max-height: 150px; overflow-y: auto; border: 1px solid #444; }
+        .checkbox-list label { display: flex; align-items: center; margin-top: 5px; font-weight: normal; color: #ddd; cursor: pointer; }
+        .checkbox-list input[type="checkbox"] { width: auto; margin: 0 10px 0 0; cursor: pointer; transform: scale(1.2); }
+        
+        .btn-submit { background: #bb86fc; color: #000; border: none; padding: 12px 20px; margin-top: 25px; border-radius: 4px; cursor: pointer; font-weight: bold; width: 100%; font-size: 16px; }
+        .btn-submit:hover { background: #9b68e6; }
+        .success { color: #03dac6; margin-top: 20px; font-weight: bold; text-align: center; background: rgba(3, 218, 198, 0.1); padding: 10px; border-radius: 4px;}
+        .error { color: #cf6679; margin-top: 20px; font-weight: bold; text-align: center; background: rgba(207, 102, 121, 0.1); padding: 10px; border-radius: 4px;}
     </style>
+    <script>
+        function selectAll(state) {
+            document.querySelectorAll('input[name="selected_senders"]').forEach(cb => cb.checked = state);
+        }
+        function selectRandom() {
+            selectAll(false);
+            let checkboxes = Array.from(document.querySelectorAll('input[name="selected_senders"]'));
+            let count = parseInt(document.getElementById('randomCount').value) || 1;
+            
+            // Перемешиваем массив чекбоксов
+            for (let i = checkboxes.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [checkboxes[i], checkboxes[j]] = [checkboxes[j], checkboxes[i]];
+            }
+            // Выбираем первые 'count' штук
+            for(let i=0; i < Math.min(count, checkboxes.length); i++) {
+                checkboxes[i].checked = true;
+            }
+        }
+    </script>
 </head>
 <body>
     <div class="container">
-        <h2>Система рассылки кодов</h2>
-        {% if message %}
-            <div class="success">{{ message }}</div>
-        {% endif %}
-        {% if error %}
-            <div class="error">{{ error }}</div>
-        {% endif %}
+        <h2>Система рассылки eChat</h2>
+        {% if message %}<div class="success">{{ message }}</div>{% endif %}
+        {% if error %}<div class="error">{{ error }}</div>{% endif %}
+        
         <form method="POST">
             <label>Мастер-пароль (пин-код):</label>
             <input type="password" name="pincode" required placeholder="Введите пароль для запуска">
 
-            <label>Кому отправляем:</label>
-            <div style="font-size: 12px; color: #aaa;">Формат: один email на строку</div>
+            <label>Выберите отправителей (Найдено: {{ emails|length }}):</label>
+            <div class="controls">
+                <button type="button" onclick="selectAll(true)">Выбрать все</button>
+                <button type="button" onclick="selectAll(false)">Снять все</button>
+                <button type="button" onclick="selectRandom()">Рандомно:</button>
+                <input type="number" id="randomCount" min="1" max="{{ emails|length }}" value="1"> шт.
+            </div>
+            
+            <div class="checkbox-list">
+                {% if emails %}
+                    {% for email in emails %}
+                    <label>
+                        <input type="checkbox" name="selected_senders" value="{{ email }}" checked>
+                        {{ email }}
+                    </label>
+                    {% endfor %}
+                {% else %}
+                    <div style="color:#cf6679;">Файл senders.txt пуст или не найден!</div>
+                {% endif %}
+            </div>
+
+            <label>Кому отправляем (один email на строку):</label>
             <textarea name="targets" rows="4" required placeholder="user1@gmail.com&#10;user2@yandex.ru"></textarea>
 
             <label>Тема письма:</label>
@@ -74,7 +127,7 @@ HTML_TEMPLATE = """
             <label>Интервал между отправками (в секундах):</label>
             <input type="number" name="delay" value="5" min="1" required>
 
-            <button type="submit">Запустить рассылку</button>
+            <button type="submit" class="btn-submit">🚀 Запустить рассылку</button>
         </form>
     </div>
 </body>
@@ -86,7 +139,7 @@ def mailer_worker(senders_list, targets_list, subject, body_template, delay):
     success_count = 0
     error_count = 0
     
-    send_telegram_message(f"🚀 <b>Начата новая сессия рассылки</b>\nВсего адресов в очереди: {len(targets_list)}")
+    send_telegram_message(f"🚀 <b>Начата рассылка</b>\nОтправителей в работе: {len(senders_list)}\nПолучателей: {len(targets_list)}")
 
     for target in targets_list:
         current = next(sender_pool)
@@ -98,73 +151,67 @@ def mailer_worker(senders_list, targets_list, subject, body_template, delay):
         msg["From"] = current["email"]
         msg["To"] = target
         
-                try:
-            # Используем SMTP_SSL и порт 465
+        try:
+            # ---> ВНИМАНИЕ: НАСТРОЙКИ ДЛЯ FIRSTMAIL (или Yandex/Mail.ru) <---
             with smtplib.SMTP_SSL("smtp.firstmail.ltd", 465) as server:
                 server.login(current["email"], current["password"])
                 server.send_message(msg)
-
             
             print(f"✅ Отправлено: {target} (код: {unique_code})")
             success_count += 1
-            send_telegram_message(f"✅ Письмо успешно ушло на <b>{target}</b>\nС ящика: <code>{current['email']}</code>\nКод: {unique_code}")
+            send_telegram_message(f"✅ Ушло на <b>{target}</b>\nС ящика: <code>{current['email']}</code>\nКод: {unique_code}")
             
         except Exception as e:
-            print(f"❌ Ошибка отправки на {target}: {e}")
+            print(f"❌ Ошибка на {target}: {e}")
             error_count += 1
-            send_telegram_message(f"❌ Ошибка при отправке на <b>{target}</b>\nС ящика: <code>{current['email']}</code>\nПричина: {e}")
+            send_telegram_message(f"❌ Ошибка отправки на <b>{target}</b>\nС ящика: <code>{current['email']}</code>\nПричина: {e}")
         
         time.sleep(delay)
         
     report_msg = (
         "📊 <b>Рассылка завершена!</b>\n\n"
-        f"✅ Успешно отправлено: <b>{success_count}</b>\n"
+        f"✅ Успешно: <b>{success_count}</b>\n"
         f"❌ Ошибок: <b>{error_count}</b>"
     )
     send_telegram_message(report_msg)
 
 @app.route('/', methods=['GET', 'POST'])
 def index():
+    # Загружаем все почты из файла
+    all_senders = load_senders()
+    emails_only = [s['email'] for s in all_senders]
+
     if request.method == 'POST':
-        # 1. Проверяем пин-код
-        user_pincode = request.form.get('pincode', '')
-        if user_pincode != '1234':  # ЗАМЕНИ НА СВОЙ ПИН-КОД!
-            return render_template_string(HTML_TEMPLATE, error="❌ Неверный пин-код!")
+        # Проверка пароля панели
+        if request.form.get('pincode', '') != '1234': # Твой пин-код
+            return render_template_string(HTML_TEMPLATE, error="❌ Неверный пин-код!", emails=emails_only)
 
-        # 2. Читаем отправителей из файла senders.txt
-        senders_list = []
-        try:
-            with open('senders.txt', 'r', encoding='utf-8') as f:
-                raw_senders = f.read().strip().split('\n')
-                
-            for line in raw_senders:
-                if ':' in line:
-                    email, pwd = line.split(':', 1)
-                    senders_list.append({"email": email.strip(), "password": pwd.strip()})
-        except FileNotFoundError:
-            return render_template_string(HTML_TEMPLATE, error="❌ Ошибка: файл senders.txt не найден рядом со скриптом!")
+        # Собираем почты, которые были отмечены галочками
+        selected_emails = request.form.getlist('selected_senders')
+        if not selected_emails:
+            return render_template_string(HTML_TEMPLATE, error="❌ Вы не выбрали ни одного отправителя!", emails=emails_only)
 
-        if not senders_list:
-            return render_template_string(HTML_TEMPLATE, error="❌ В файле senders.txt нет корректных аккаунтов (формат почта:пароль)")
+        # Оставляем только те аккаунты, которые мы выбрали
+        active_senders = [s for s in all_senders if s['email'] in selected_emails]
 
-        # 3. Собираем остальные данные из формы
         raw_targets = request.form.get('targets', '').strip().split('\n')
-        subject = request.form.get('subject', 'Уведомление')
+        targets_list = [t.strip() for t in raw_targets if t.strip()]
+        
+        subject = request.form.get('subject', '')
         body = request.form.get('body', '')
         delay = int(request.form.get('delay', 5))
-        
-        targets_list = [t.strip() for t in raw_targets if t.strip()]
 
         if targets_list:
             thread = threading.Thread(
                 target=mailer_worker, 
-                args=(senders_list, targets_list, subject, body, delay)
+                args=(active_senders, targets_list, subject, body, delay)
             )
             thread.start()
-            
-            return render_template_string(HTML_TEMPLATE, message="🚀 Рассылка запущена! Чекни Telegram.")
+            return render_template_string(HTML_TEMPLATE, message="🚀 Рассылка запущена! Чекни Telegram.", emails=emails_only)
+        else:
+            return render_template_string(HTML_TEMPLATE, error="❌ Нет получателей!", emails=emails_only)
 
-    return render_template_string(HTML_TEMPLATE)
+    return render_template_string(HTML_TEMPLATE, emails=emails_only)
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000)

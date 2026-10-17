@@ -151,11 +151,12 @@ def mailer_worker(senders_list, targets_list, subject, body_template, delay):
         msg["From"] = current["email"]
         msg["To"] = target
         
-        try:
-            # ---> ВНИМАНИЕ: НАСТРОЙКИ ДЛЯ FIRSTMAIL (или Yandex/Mail.ru) <---
-            with smtplib.SMTP_SSL("smtp.firstmail.ltd", 465) as server:
+                try:
+            with smtplib.SMTP("smtp.firstmail.ltd", 587) as server:
+                server.starttls() # Принудительно включаем шифрование
                 server.login(current["email"], current["password"])
                 server.send_message(msg)
+
             
             print(f"✅ Отправлено: {target} (код: {unique_code})")
             success_count += 1

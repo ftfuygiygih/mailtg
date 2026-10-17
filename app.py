@@ -6,12 +6,13 @@ import time
 import threading
 import random
 import requests
+import ssl  # Добавлен импорт ssl для обхода ошибки сертификатов
 
 app = Flask(__name__)
 
 # --- Настройки Telegram ---
 TELEGRAM_BOT_TOKEN = '8793490491:AAH1aXRS3k9xzbouVQBIP-UjwWYD5jPeJ1U' 
-TELEGRAM_CHAT_ID = '8705859046'
+TELEGRAM_CHAT_ID = '8705859046'   
 
 def send_telegram_message(text):
     if TELEGRAM_BOT_TOKEN == 'ТВОЙ_ТОКЕН_ОТ_BOTFATHER' or TELEGRAM_CHAT_ID == 'ТВОЙ_CHAT_ID':
@@ -46,13 +47,11 @@ HTML_TEMPLATE = """
         label { display: block; margin-top: 15px; font-weight: bold; color: #bb86fc; }
         input[type="text"], input[type="password"], input[type="number"], textarea { width: 100%; box-sizing: border-box; background: #2c2c2c; color: #fff; border: 1px solid #444; padding: 10px; border-radius: 4px; margin-top: 5px; }
         
-        /* Стили для кнопок управления почтами */
         .controls { display: flex; gap: 10px; margin-top: 10px; align-items: center; flex-wrap: wrap; }
         .controls button { background: #333; color: #fff; border: 1px solid #555; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-size: 13px; margin: 0;}
         .controls button:hover { background: #444; }
         .controls input[type="number"] { width: 60px; padding: 6px; margin: 0; }
         
-        /* Стили для списка с галочками */
         .checkbox-list { background: #2c2c2c; padding: 15px; border-radius: 4px; margin-top: 10px; max-height: 150px; overflow-y: auto; border: 1px solid #444; }
         .checkbox-list label { display: flex; align-items: center; margin-top: 5px; font-weight: normal; color: #ddd; cursor: pointer; }
         .checkbox-list input[type="checkbox"] { width: auto; margin: 0 10px 0 0; cursor: pointer; transform: scale(1.2); }
@@ -71,12 +70,10 @@ HTML_TEMPLATE = """
             let checkboxes = Array.from(document.querySelectorAll('input[name="selected_senders"]'));
             let count = parseInt(document.getElementById('randomCount').value) || 1;
             
-            // Перемешиваем массив чекбоксов
             for (let i = checkboxes.length - 1; i > 0; i--) {
                 const j = Math.floor(Math.random() * (i + 1));
                 [checkboxes[i], checkboxes[j]] = [checkboxes[j], checkboxes[i]];
             }
-            // Выбираем первые 'count' штук
             for(let i=0; i < Math.min(count, checkboxes.length); i++) {
                 checkboxes[i].checked = true;
             }
@@ -152,11 +149,14 @@ def mailer_worker(senders_list, targets_list, subject, body_template, delay):
         msg["To"] = target
         
         try:
+            # Создаем контекст, игнорирующий ошибки SSL-сертификатов a-Shell
+            context = ssl._create_unverified_context()
             with smtplib.SMTP("smtp.firstmail.ltd", 587) as server:
-                server.starttls() 
+                server.ehlo()
+                server.starttls(context=context)
+                server.ehlo()
                 server.login(current["email"], current["password"])
                 server.send_message(msg)
-
             
             print(f"✅ Отправлено: {target} (код: {unique_code})")
             success_count += 1
@@ -178,21 +178,17 @@ def mailer_worker(senders_list, targets_list, subject, body_template, delay):
 
 @app.route('/', methods=['GET', 'POST'])
 def index():
-    # Загружаем все почты из файла
     all_senders = load_senders()
     emails_only = [s['email'] for s in all_senders]
 
     if request.method == 'POST':
-        # Проверка пароля панели
-        if request.form.get('pincode', '') != '1234': # Твой пин-код
+        if request.form.get('pincode', '') != '1234':
             return render_template_string(HTML_TEMPLATE, error="❌ Неверный пин-код!", emails=emails_only)
 
-        # Собираем почты, которые были отмечены галочками
         selected_emails = request.form.getlist('selected_senders')
         if not selected_emails:
             return render_template_string(HTML_TEMPLATE, error="❌ Вы не выбрали ни одного отправителя!", emails=emails_only)
 
-        # Оставляем только те аккаунты, которые мы выбрали
         active_senders = [s for s in all_senders if s['email'] in selected_emails]
 
         raw_targets = request.form.get('targets', '').strip().split('\n')
